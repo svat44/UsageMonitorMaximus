@@ -118,7 +118,11 @@ impl Provider for ClaudeCodeStatusLineProvider {
                 .map_err(|e| UsageError::Permission(format!("cannot create {}: {e}", dir.display())))?;
             let n = proto::prune_old(&dir, PRUNE_AFTER);
             if n > 0 {
-                tracing::debug!(provider = STATUSLINE_PROVIDER_ID, removed = n, "pruned old bridge files");
+                tracing::debug!(
+                    provider = STATUSLINE_PROVIDER_ID,
+                    removed = n,
+                    "pruned old bridge files"
+                );
             }
             Ok(())
         })
@@ -165,8 +169,12 @@ impl Provider for ClaudeCodeStatusLineProvider {
         let five_snap = newest_with(|r| r.five_hour.as_ref());
         let week_snap = newest_with(|r| r.seven_day.as_ref());
         // If no snapshot carries the window, still pass the newest snapshot's absence info.
-        let five = five_snap.and_then(|s| s.payload.rate_limits.as_ref()).and_then(|r| r.five_hour.as_ref());
-        let week = week_snap.and_then(|s| s.payload.rate_limits.as_ref()).and_then(|r| r.seven_day.as_ref());
+        let five = five_snap
+            .and_then(|s| s.payload.rate_limits.as_ref())
+            .and_then(|r| r.five_hour.as_ref());
+        let week = week_snap
+            .and_then(|s| s.payload.rate_limits.as_ref())
+            .and_then(|r| r.seven_day.as_ref());
 
         let mut out = vec![
             Self::window_measurement(Id::SubscriptionFiveHourUtilization, five, five_snap, any, now),
@@ -182,7 +190,13 @@ impl Provider for ClaudeCodeStatusLineProvider {
                     .with_source_at(snaps[0].received_at),
             );
         } else {
-            out.push(Measurement::unavailable(Id::LocalActiveSessions, pid, UnavailableReason::NoDataYet, now, v));
+            out.push(Measurement::unavailable(
+                Id::LocalActiveSessions,
+                pid,
+                UnavailableReason::NoDataYet,
+                now,
+                v,
+            ));
         }
         for s in active {
             let scope = proto::sanitize_session_id(s.payload.session_id.as_deref().unwrap_or("unknown"));
@@ -223,7 +237,11 @@ impl Provider for ClaudeCodeStatusLineProvider {
     async fn health(&self) -> ProviderHealth {
         let last = *self.last_ok.lock().unwrap();
         ProviderHealth {
-            state: if last.is_some() { HealthState::Healthy } else { HealthState::Degraded },
+            state: if last.is_some() {
+                HealthState::Healthy
+            } else {
+                HealthState::Degraded
+            },
             detail: self.last_detail.lock().unwrap().clone(),
             last_success_at: last,
         }
@@ -238,7 +256,9 @@ impl Provider for ClaudeCodeStatusLineProvider {
 mod tests {
     use super::*;
     use crate::model::MeasurementValue;
-    use crate::statusline_protocol::{write_snapshot, ContextWindow, Cost, RateLimits, StatusLinePayload, SCHEMA_VERSION};
+    use crate::statusline_protocol::{
+        write_snapshot, ContextWindow, Cost, RateLimits, StatusLinePayload, SCHEMA_VERSION,
+    };
 
     fn env(session: &str, at: DateTime<Utc>, rl: Option<RateLimits>) -> SnapshotEnvelope {
         SnapshotEnvelope {
@@ -246,8 +266,13 @@ mod tests {
             received_at: at,
             payload: StatusLinePayload {
                 session_id: Some(session.into()),
-                context_window: Some(ContextWindow { used_percentage: Some(12.0), context_window_size: Some(200000.0) }),
-                cost: Some(Cost { total_cost_usd: Some(0.5) }),
+                context_window: Some(ContextWindow {
+                    used_percentage: Some(12.0),
+                    context_window_size: Some(200000.0),
+                }),
+                cost: Some(Cost {
+                    total_cost_usd: Some(0.5),
+                }),
                 rate_limits: rl,
                 ..Default::default()
             },
@@ -255,11 +280,17 @@ mod tests {
     }
     fn rl(five: f64, week: f64, reset5: DateTime<Utc>, reset7: DateTime<Utc>) -> RateLimits {
         RateLimits {
-            five_hour: Some(RateWindow { used_percentage: Some(five), resets_at: Some(reset5.timestamp() as f64) }),
-            seven_day: Some(RateWindow { used_percentage: Some(week), resets_at: Some(reset7.timestamp() as f64) }),
+            five_hour: Some(RateWindow {
+                used_percentage: Some(five),
+                resets_at: Some(reset5.timestamp() as f64),
+            }),
+            seven_day: Some(RateWindow {
+                used_percentage: Some(week),
+                resets_at: Some(reset7.timestamp() as f64),
+            }),
         }
     }
-    fn find<'a>(ms: &'a [Measurement], id: Id) -> Vec<&'a Measurement> {
+    fn find(ms: &[Measurement], id: Id) -> Vec<&Measurement> {
         ms.iter().filter(|m| m.id == id).collect()
     }
 
@@ -270,7 +301,15 @@ mod tests {
         let now = Utc::now();
         let ms = p.fetch(&FetchContext { now }).await.unwrap();
         for m in &ms {
-            assert!(matches!(m.value, MeasurementValue::Unavailable { reason: UnavailableReason::NoDataYet }), "{m:?}");
+            assert!(
+                matches!(
+                    m.value,
+                    MeasurementValue::Unavailable {
+                        reason: UnavailableReason::NoDataYet
+                    }
+                ),
+                "{m:?}"
+            );
         }
         crate::providers::validate_measurements(p.descriptor(), &ms).unwrap();
     }
@@ -281,7 +320,11 @@ mod tests {
         let now = Utc::now();
         let r5 = now + Duration::hours(2);
         let r7 = now + Duration::days(2);
-        write_snapshot(d.path(), &env("s1", now - Duration::seconds(5), Some(rl(23.5, 41.2, r5, r7)))).unwrap();
+        write_snapshot(
+            d.path(),
+            &env("s1", now - Duration::seconds(5), Some(rl(23.5, 41.2, r5, r7))),
+        )
+        .unwrap();
         let p = ClaudeCodeStatusLineProvider::new(d.path().to_path_buf());
         let ms = p.fetch(&FetchContext { now }).await.unwrap();
         crate::providers::validate_measurements(p.descriptor(), &ms).unwrap();
@@ -291,7 +334,10 @@ mod tests {
         assert_eq!(five.resets_at.unwrap().timestamp(), r5.timestamp());
         assert_eq!(five.verification, Verification::OfficialLocalInterface);
         assert!(!five.simulated && !five.estimated);
-        assert_eq!(five.category, crate::model::MeasurementCategory::SubscriptionUsage);
+        assert_eq!(
+            five.category,
+            crate::model::MeasurementCategory::SubscriptionUsage
+        );
 
         let ctx = &find(&ms, Id::LocalContextWindowUtilization)[0];
         assert_eq!(ctx.category, crate::model::MeasurementCategory::LocalClaudeCode);
@@ -311,10 +357,15 @@ mod tests {
         let five = &find(&ms, Id::SubscriptionFiveHourUtilization)[0];
         assert_eq!(
             five.value,
-            MeasurementValue::Unavailable { reason: UnavailableReason::NotReportedBySource }
+            MeasurementValue::Unavailable {
+                reason: UnavailableReason::NotReportedBySource
+            }
         );
         // local data still flows
-        assert!(find(&ms, Id::LocalContextWindowUtilization)[0].value.value().is_some());
+        assert!(find(&ms, Id::LocalContextWindowUtilization)[0]
+            .value
+            .value()
+            .is_some());
     }
 
     #[tokio::test]
@@ -323,16 +374,25 @@ mod tests {
         let now = Utc::now();
         write_snapshot(
             d.path(),
-            &env("s1", now - Duration::hours(6), Some(rl(99.0, 50.0, now - Duration::hours(1), now + Duration::days(1)))),
+            &env(
+                "s1",
+                now - Duration::hours(6),
+                Some(rl(99.0, 50.0, now - Duration::hours(1), now + Duration::days(1))),
+            ),
         )
         .unwrap();
         let p = ClaudeCodeStatusLineProvider::new(d.path().to_path_buf());
         let ms = p.fetch(&FetchContext { now }).await.unwrap();
         assert_eq!(
             find(&ms, Id::SubscriptionFiveHourUtilization)[0].value,
-            MeasurementValue::Unavailable { reason: UnavailableReason::WindowExpired }
+            MeasurementValue::Unavailable {
+                reason: UnavailableReason::WindowExpired
+            }
         );
-        assert_eq!(find(&ms, Id::SubscriptionWeeklyUtilization)[0].value.value(), Some(50.0));
+        assert_eq!(
+            find(&ms, Id::SubscriptionWeeklyUtilization)[0].value.value(),
+            Some(50.0)
+        );
         // 6h-old session is not "active"
         assert_eq!(find(&ms, Id::LocalActiveSessions)[0].value.value(), Some(0.0));
         assert!(find(&ms, Id::LocalContextWindowUtilization).is_empty());
@@ -343,11 +403,22 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let now = Utc::now();
         let (r5, r7) = (now + Duration::hours(1), now + Duration::days(1));
-        write_snapshot(d.path(), &env("old", now - Duration::minutes(5), Some(rl(10.0, 10.0, r5, r7)))).unwrap();
-        write_snapshot(d.path(), &env("new", now - Duration::seconds(10), Some(rl(30.0, 20.0, r5, r7)))).unwrap();
+        write_snapshot(
+            d.path(),
+            &env("old", now - Duration::minutes(5), Some(rl(10.0, 10.0, r5, r7))),
+        )
+        .unwrap();
+        write_snapshot(
+            d.path(),
+            &env("new", now - Duration::seconds(10), Some(rl(30.0, 20.0, r5, r7))),
+        )
+        .unwrap();
         let p = ClaudeCodeStatusLineProvider::new(d.path().to_path_buf());
         let ms = p.fetch(&FetchContext { now }).await.unwrap();
-        assert_eq!(find(&ms, Id::SubscriptionFiveHourUtilization)[0].value.value(), Some(30.0));
+        assert_eq!(
+            find(&ms, Id::SubscriptionFiveHourUtilization)[0].value.value(),
+            Some(30.0)
+        );
         assert_eq!(find(&ms, Id::LocalContextWindowUtilization).len(), 2);
     }
 

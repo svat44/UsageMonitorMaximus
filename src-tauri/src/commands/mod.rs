@@ -39,21 +39,37 @@ pub fn get_config(state: State<'_, AppState>) -> AppConfig {
 }
 
 #[tauri::command]
-pub async fn update_config(app: AppHandle, state: State<'_, AppState>, config: AppConfig) -> CmdResult<AppConfig> {
-    let applied = state.engine.apply_config(config).await.map_err(|e| err(e, "update_config"))?;
+pub async fn update_config(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    config: AppConfig,
+) -> CmdResult<AppConfig> {
+    let applied = state
+        .engine
+        .apply_config(config)
+        .await
+        .map_err(|e| err(e, "update_config"))?;
     crate::apply_side_effects(&app, &applied);
     Ok(applied)
 }
 
 #[tauri::command]
-pub async fn set_monitoring_enabled(app: AppHandle, state: State<'_, AppState>, enabled: bool) -> CmdResult<AppConfig> {
+pub async fn set_monitoring_enabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> CmdResult<AppConfig> {
     let mut c = state.engine.config();
     c.monitoring_enabled = enabled;
     update_config(app, state, c).await
 }
 
 #[tauri::command]
-pub async fn select_provider(app: AppHandle, state: State<'_, AppState>, provider_id: String) -> CmdResult<AppConfig> {
+pub async fn select_provider(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider_id: String,
+) -> CmdResult<AppConfig> {
     let mut c = state.engine.config();
     c.selected_provider = provider_id;
     // A different provider has different interval limits: fall back to its recommended interval.
@@ -63,7 +79,11 @@ pub async fn select_provider(app: AppHandle, state: State<'_, AppState>, provide
 
 #[tauri::command]
 pub async fn refresh_now(state: State<'_, AppState>) -> CmdResult<SyncResult> {
-    state.engine.refresh_now().await.map_err(|e| err(e, "refresh_now"))
+    state
+        .engine
+        .refresh_now()
+        .await
+        .map_err(|e| err(e, "refresh_now"))
 }
 
 #[tauri::command]
@@ -89,7 +109,11 @@ pub struct StatuslineSetup {
 
 #[tauri::command]
 pub fn get_statusline_setup(state: State<'_, AppState>) -> StatuslineSetup {
-    let exe = if cfg!(windows) { "usage-monitor-statusline.exe" } else { "usage-monitor-statusline" };
+    let exe = if cfg!(windows) {
+        "usage-monitor-statusline.exe"
+    } else {
+        "usage-monitor-statusline"
+    };
     let path = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(exe)))
@@ -108,3 +132,13 @@ pub fn get_statusline_setup(state: State<'_, AppState>) -> StatuslineSetup {
     }
 }
 
+/// Smoke-test hook: lets the webview report what it rendered. Does nothing unless
+/// `USAGE_MONITOR_SMOKE_TEST=1` is set in the process environment.
+#[tauri::command]
+pub fn smoke_report(state: State<'_, AppState>, rendered: bool, text: String) {
+    if std::env::var("USAGE_MONITOR_SMOKE_TEST").ok().as_deref() == Some("1") {
+        let v =
+            serde_json::json!({ "rendered": rendered, "text": text.chars().take(4000).collect::<String>() });
+        let _ = std::fs::write(state.data_dir.join("smoke-ui.json"), v.to_string());
+    }
+}

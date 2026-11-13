@@ -8,7 +8,12 @@ pub struct TauriEventSink(pub AppHandle);
 impl EventSink for TauriEventSink {
     fn emit(&self, event: &MonitoringEvent) {
         if let Err(e) = self.0.emit(event.name(), event.payload()) {
-            tracing::warn!(operation = "emit_event", category = "internal", "failed to emit {}: {e}", event.name());
+            tracing::warn!(
+                operation = "emit_event",
+                category = "internal",
+                "failed to emit {}: {e}",
+                event.name()
+            );
         }
     }
 }

@@ -47,7 +47,10 @@ pub struct CredentialKey {
 
 impl CredentialKey {
     pub fn new(provider_id: impl Into<String>, name: impl Into<String>) -> Self {
-        Self { provider_id: provider_id.into(), name: name.into() }
+        Self {
+            provider_id: provider_id.into(),
+            name: name.into(),
+        }
     }
 }
 
@@ -64,7 +67,10 @@ pub struct InMemoryCredentialStore(Mutex<HashMap<CredentialKey, Secret>>);
 
 impl CredentialStore for InMemoryCredentialStore {
     fn set(&self, key: &CredentialKey, secret: &Secret) -> Result<()> {
-        self.0.lock().map_err(poisoned)?.insert(key.clone(), secret.clone());
+        self.0
+            .lock()
+            .map_err(poisoned)?
+            .insert(key.clone(), secret.clone());
         Ok(())
     }
     fn get(&self, key: &CredentialKey) -> Result<Option<Secret>> {
@@ -110,6 +116,9 @@ mod tests {
 
     #[test]
     fn in_memory_store_conforms() {
-        conformance_suite(&InMemoryCredentialStore::default(), &CredentialKey::new("test-provider", "test-key"));
+        conformance_suite(
+            &InMemoryCredentialStore::default(),
+            &CredentialKey::new("test-provider", "test-key"),
+        );
     }
 }

@@ -52,9 +52,13 @@ pub struct ProviderDescriptor {
 pub enum Availability {
     Available,
     /// Temporarily not usable (e.g. source directory unreadable).
-    Unavailable { reason: String },
+    Unavailable {
+        reason: String,
+    },
     /// Will never work in this environment (e.g. unsupported OS).
-    Unsupported { reason: String },
+    Unsupported {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

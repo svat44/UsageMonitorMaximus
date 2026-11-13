@@ -51,7 +51,9 @@ pub enum SyncResult {
     /// Another sync was in progress; nothing was done.
     AlreadyRunning,
     /// Provider is rate limited; no request was made.
-    SkippedRateLimited { resume_at: DateTime<Utc> },
+    SkippedRateLimited {
+        resume_at: DateTime<Utc>,
+    },
 }
 
 pub struct EngineDeps {
@@ -156,7 +158,12 @@ impl MonitoringEngine {
     }
 
     fn effective_interval(&self, desc: &ProviderDescriptor) -> Duration {
-        let secs = self.inner.config.read().unwrap().effective_interval_secs(&desc.refresh);
+        let secs = self
+            .inner
+            .config
+            .read()
+            .unwrap()
+            .effective_interval_secs(&desc.refresh);
         Duration::from_secs(secs as u64)
     }
 
@@ -170,7 +177,11 @@ impl MonitoringEngine {
             self.inner.repo.upsert_provider(&d, now).await?;
         }
         if let Err(e) = self.inner.repo.prune(&self.inner.retention, now).await {
-            tracing::warn!(operation = "prune", category = e.category().as_str(), "retention prune failed: {e}");
+            tracing::warn!(
+                operation = "prune",
+                category = e.category().as_str(),
+                "retention prune failed: {e}"
+            );
         }
         self.activate_provider().await
     }
@@ -187,7 +198,12 @@ impl MonitoringEngine {
         }
         *self.inner.initialized_provider.lock().unwrap() = None;
         let now = self.inner.clock.now();
-        let restored = match self.inner.repo.latest_measurements(&desc.id, now - RESTORE_WINDOW).await {
+        let restored = match self
+            .inner
+            .repo
+            .latest_measurements(&desc.id, now - RESTORE_WINDOW)
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(provider = %desc.id, operation = "restore", category = e.category().as_str(), "{e}");
@@ -270,7 +286,10 @@ impl MonitoringEngine {
             s.connection = ConnectionState::NotStarted;
         });
         tracing::info!(operation = "stop", "monitoring stopped");
-        self.emit(MonitoringEvent::Stopped(LifecyclePayload { at: self.inner.clock.now(), provider_id: pid }));
+        self.emit(MonitoringEvent::Stopped(LifecyclePayload {
+            at: self.inner.clock.now(),
+            provider_id: pid,
+        }));
         self.emit(MonitoringEvent::Updated(self.snapshot()));
     }
 
@@ -289,15 +308,16 @@ impl MonitoringEngine {
 
     /// Validate, persist and apply a new configuration, restarting the loop if needed.
     pub async fn apply_config(&self, new: AppConfig) -> Result<AppConfig> {
-        let provider = self
-            .inner
-            .registry
-            .get(&new.selected_provider)
-            .ok_or_else(|| UsageError::Configuration(format!("unknown provider '{}'", new.selected_provider)))?;
+        let provider = self.inner.registry.get(&new.selected_provider).ok_or_else(|| {
+            UsageError::Configuration(format!("unknown provider '{}'", new.selected_provider))
+        })?;
         new.validate(&provider.descriptor().refresh)?;
 
         let json = serde_json::to_string(&new).map_err(|e| UsageError::Configuration(e.to_string()))?;
-        self.inner.repo.set_preference(PREF_KEY_CONFIG, &json, self.inner.clock.now()).await?;
+        self.inner
+            .repo
+            .set_preference(PREF_KEY_CONFIG, &json, self.inner.clock.now())
+            .await?;
 
         let old = std::mem::replace(&mut *self.inner.config.write().unwrap(), new.clone());
         let was_running = self.is_running().await;
@@ -313,7 +333,11 @@ impl MonitoringEngine {
         if new.monitoring_enabled && !self.is_running().await {
             // A provider that is unsupported reports through events; config is still saved.
             if let Err(e) = self.start().await {
-                tracing::warn!(operation = "apply_config", category = e.category().as_str(), "start failed: {e}");
+                tracing::warn!(
+                    operation = "apply_config",
+                    category = e.category().as_str(),
+                    "start failed: {e}"
+                );
             }
         } else if old.refresh_interval_secs != new.refresh_interval_secs {
             let interval = self.effective_interval(provider.descriptor());
@@ -323,7 +347,8 @@ impl MonitoringEngine {
                     ConnectionState::Current | ConnectionState::Stale | ConnectionState::Simulated
                 ) {
                     if let Some(last) = s.last_attempt_at {
-                        s.next_attempt_at = Some(last + ChronoDuration::from_std(interval).unwrap_or_default());
+                        s.next_attempt_at =
+                            Some(last + ChronoDuration::from_std(interval).unwrap_or_default());
                     }
                 }
             });
@@ -357,7 +382,8 @@ impl MonitoringEngine {
             loop {
                 let wait = {
                     let st = self.inner.state.read().unwrap();
-                    st.next_attempt_at.map(|t| (t - self.inner.clock.now()).to_std().unwrap_or(Duration::ZERO))
+                    st.next_attempt_at
+                        .map(|t| (t - self.inner.clock.now()).to_std().unwrap_or(Duration::ZERO))
                 };
                 tokio::select! {
                     _ = cancel.cancelled() => return,
@@ -423,11 +449,19 @@ impl MonitoringEngine {
             }
         };
 
-        let n = self.inner.sync_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let n = self
+            .inner
+            .sync_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
         if n % PRUNE_EVERY_N_SYNCS == 0 {
             let _ = self.inner.repo.prune(&self.inner.retention, finished).await;
         }
-        Ok(if ok { SyncResult::Succeeded } else { SyncResult::Failed })
+        Ok(if ok {
+            SyncResult::Succeeded
+        } else {
+            SyncResult::Failed
+        })
     }
 
     async fn ensure_initialized(&self, p: &Arc<dyn Provider>) -> Result<()> {
@@ -450,7 +484,13 @@ impl MonitoringEngine {
 
     // ---------------------------------------------------------------- outcomes
 
-    async fn on_success(&self, desc: &ProviderDescriptor, mut ms: Vec<Measurement>, started: DateTime<Utc>, now: DateTime<Utc>) {
+    async fn on_success(
+        &self,
+        desc: &ProviderDescriptor,
+        mut ms: Vec<Measurement>,
+        started: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) {
         let stale_after = ChronoDuration::seconds(desc.refresh.stale_after_secs as i64);
         for m in &mut ms {
             m.stale = m.source_at.is_some_and(|src| now - src > stale_after);
@@ -463,16 +503,23 @@ impl MonitoringEngine {
                 } else {
                     crate::model::Verification::OfficialLocalInterface
                 };
-                let mut m = Measurement::unavailable(*cap, desc.id.clone(), UnavailableReason::NotReported, now, v);
+                let mut m =
+                    Measurement::unavailable(*cap, desc.id.clone(), UnavailableReason::NotReported, now, v);
                 m.simulated = desc.simulated;
                 ms.push(m);
             }
         }
-        let order = |m: &Measurement| crate::model::MeasurementId::ALL.iter().position(|x| *x == m.id).unwrap_or(99);
+        let order = |m: &Measurement| {
+            crate::model::MeasurementId::ALL
+                .iter()
+                .position(|x| *x == m.id)
+                .unwrap_or(99)
+        };
         ms.sort_by(|a, b| order(a).cmp(&order(b)).then_with(|| a.scope.cmp(&b.scope)));
 
         let any_available = ms.iter().any(|m| m.value.value().is_some());
-        let all_available_stale = any_available && ms.iter().filter(|m| m.value.value().is_some()).all(|m| m.stale);
+        let all_available_stale =
+            any_available && ms.iter().filter(|m| m.value.value().is_some()).all(|m| m.stale);
         let conn = if desc.simulated {
             ConnectionState::Simulated
         } else if all_available_stale {
@@ -542,7 +589,14 @@ impl MonitoringEngine {
             .collect()
     }
 
-    async fn on_failure(&self, desc: &ProviderDescriptor, err: UsageError, started: DateTime<Utc>, now: DateTime<Utc>, _t: Trigger) {
+    async fn on_failure(
+        &self,
+        desc: &ProviderDescriptor,
+        err: UsageError,
+        started: DateTime<Utc>,
+        now: DateTime<Utc>,
+        _t: Trigger,
+    ) {
         use crate::errors::ErrorCategory as C;
         let info = err.to_info(Some(&desc.id), "fetch", now);
         // Log category, never the raw payload; messages are provider-authored and secret-free.
@@ -566,7 +620,11 @@ impl MonitoringEngine {
             C::UnsupportedCapability => (ConnectionState::PermanentlyUnsupported, None, None),
             _ => {
                 let d = backoff.delay(failures, jitter);
-                (ConnectionState::TemporarilyUnavailable, Some(now + ChronoDuration::from_std(d).unwrap_or_default()), None)
+                (
+                    ConnectionState::TemporarilyUnavailable,
+                    Some(now + ChronoDuration::from_std(d).unwrap_or_default()),
+                    None,
+                )
             }
         };
 
@@ -615,12 +673,12 @@ impl MonitoringEngine {
                 retry_after_secs: info.retry_after_secs,
                 resume_at: rate_until.unwrap_or(now),
             })),
-            ConnectionState::AuthenticationRequired => {
-                self.emit(MonitoringEvent::AuthenticationRequired(AuthenticationRequiredPayload {
+            ConnectionState::AuthenticationRequired => self.emit(MonitoringEvent::AuthenticationRequired(
+                AuthenticationRequiredPayload {
                     provider_id: desc.id.clone(),
                     error: info.clone(),
-                }))
-            }
+                },
+            )),
             _ => {}
         }
         self.emit(MonitoringEvent::Error(info));
@@ -635,7 +693,12 @@ impl MonitoringEngine {
     }
 
     async fn persistence_failed(&self, provider_id: &str, op: &str, e: UsageError) {
-        tracing::error!(provider = provider_id, operation = op, category = e.category().as_str(), "persistence failed: {e}");
+        tracing::error!(
+            provider = provider_id,
+            operation = op,
+            category = e.category().as_str(),
+            "persistence failed: {e}"
+        );
         let info = e.to_info(Some(provider_id), op, self.inner.clock.now());
         *self.inner.last_error_ever.lock().unwrap() = Some(info.clone());
         self.emit(MonitoringEvent::Error(info));
@@ -649,7 +712,11 @@ impl MonitoringEngine {
             Ok(v) => (Some(v as i32), v > 0),
             Err(_) => (None, false),
         };
-        let health = match snap.active_provider.as_deref().and_then(|id| self.inner.registry.get(id)) {
+        let health = match snap
+            .active_provider
+            .as_deref()
+            .and_then(|id| self.inner.registry.get(id))
+        {
             Some(p) => Some(p.health().await),
             None => None,
         };
@@ -662,7 +729,13 @@ impl MonitoringEngine {
             run_state: snap.run_state,
             connection: snap.connection,
             last_success_at: snap.last_success_at,
-            latest_error_category: self.inner.last_error_ever.lock().unwrap().as_ref().map(|e| e.category),
+            latest_error_category: self
+                .inner
+                .last_error_ever
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|e| e.category),
             data_dir: self.inner.data_dir.display().to_string(),
         }
     }

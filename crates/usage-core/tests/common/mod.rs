@@ -32,12 +32,19 @@ pub async fn harness(provider: MockProvider) -> Harness {
 
 pub async fn harness_in(dir: TempDir, provider: MockProvider) -> Harness {
     let provider = Arc::new(provider);
-    let repo = Arc::new(SqliteRepository::open(&dir.path().join("t.sqlite")).await.unwrap());
+    let repo = Arc::new(
+        SqliteRepository::open(&dir.path().join("t.sqlite"))
+            .await
+            .unwrap(),
+    );
     let clock = Arc::new(ManualClock::new(t0()));
     let sink = Arc::new(RecordingSink::default());
     let mut reg = ProviderRegistry::new();
     reg.register(provider.clone() as Arc<dyn Provider>).unwrap();
-    let cfg = AppConfig { selected_provider: provider.descriptor().id.clone(), ..AppConfig::default() };
+    let cfg = AppConfig {
+        selected_provider: provider.descriptor().id.clone(),
+        ..AppConfig::default()
+    };
     let engine = MonitoringEngine::new(EngineDeps {
         registry: reg,
         repo: repo.clone(),
@@ -48,7 +55,14 @@ pub async fn harness_in(dir: TempDir, provider: MockProvider) -> Harness {
         retention: RetentionPolicy::default(),
     });
     engine.initialize().await.unwrap();
-    Harness { engine, sink, clock, repo, provider, dir }
+    Harness {
+        engine,
+        sink,
+        clock,
+        repo,
+        provider,
+        dir,
+    }
 }
 
 pub fn secs(n: i64) -> Duration {

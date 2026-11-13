@@ -185,13 +185,9 @@ impl Verification {
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
-        [
-            Self::OfficialLocalInterface,
-            Self::OfficialApi,
-            Self::Simulated,
-        ]
-        .into_iter()
-        .find(|v| v.as_str() == s)
+        [Self::OfficialLocalInterface, Self::OfficialApi, Self::Simulated]
+            .into_iter()
+            .find(|v| v.as_str() == s)
     }
 }
 
@@ -511,10 +507,7 @@ mod tests {
             now(),
             Verification::OfficialLocalInterface,
         );
-        assert_eq!(
-            compute_coverage(&[m.clone()])[2].state,
-            CoverageState::Live
-        );
+        assert_eq!(compute_coverage(&[m.clone()])[2].state, CoverageState::Live);
         m.stale = true;
         assert_eq!(compute_coverage(&[m])[2].state, CoverageState::Stale);
     }

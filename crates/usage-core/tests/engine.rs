@@ -4,12 +4,12 @@ use common::*;
 use std::time::Duration as Std;
 
 use usage_core::clock::Clock;
-use usage_core::providers::Provider;
 use usage_core::errors::ErrorCategory;
 use usage_core::events::*;
 use usage_core::model::*;
 use usage_core::monitoring::{ConnectionState, RunState, SyncResult, Trigger};
 use usage_core::providers::mock::{MockBehavior, MockProvider};
+use usage_core::providers::Provider;
 use usage_core::providers::RefreshPolicy;
 use usage_core::storage::Repository;
 
@@ -23,11 +23,19 @@ fn find(snap: &usage_core::monitoring::MonitoringSnapshot, id: MeasurementId) ->
 #[tokio::test]
 async fn normal_sync_updates_state_persists_and_emits() {
     let h = harness(real("p")).await;
-    assert_eq!(h.engine.sync_once(Trigger::Manual).await.unwrap(), SyncResult::Succeeded);
+    assert_eq!(
+        h.engine.sync_once(Trigger::Manual).await.unwrap(),
+        SyncResult::Succeeded
+    );
     let s = h.engine.snapshot();
     assert_eq!(s.connection, ConnectionState::Current);
     assert_eq!(s.last_success_at, Some(t0()));
-    assert_eq!(find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0].value.value(), Some(42.0));
+    assert_eq!(
+        find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0]
+            .value
+            .value(),
+        Some(42.0)
+    );
     assert!(s.measurements.iter().all(|m| !m.stale && !m.restored));
     // persisted
     let hist = h
@@ -40,7 +48,11 @@ async fn normal_sync_updates_state_persists_and_emits() {
     // events
     let names = h.sink.names();
     assert!(names.contains(&EVENT_UPDATED) && names.contains(&EVENT_PROVIDER_STATUS_CHANGED));
-    assert!(h.sink.events().iter().any(|e| matches!(e, MonitoringEvent::ProviderStatusChanged(p)
+    assert!(h
+        .sink
+        .events()
+        .iter()
+        .any(|e| matches!(e, MonitoringEvent::ProviderStatusChanged(p)
         if p.previous == ConnectionState::NotStarted && p.current == ConnectionState::Current)));
 }
 
@@ -51,7 +63,11 @@ async fn simulated_provider_is_never_reported_as_current_or_live() {
     let s = h.engine.snapshot();
     assert!(s.simulated);
     assert_eq!(s.connection, ConnectionState::Simulated);
-    let sub = s.coverage.iter().find(|c| c.category == MeasurementCategory::SubscriptionUsage).unwrap();
+    let sub = s
+        .coverage
+        .iter()
+        .find(|c| c.category == MeasurementCategory::SubscriptionUsage)
+        .unwrap();
     assert_eq!(sub.state, CoverageState::Simulated);
     assert!(s.measurements.iter().all(|m| m.simulated));
 }
@@ -64,12 +80,23 @@ async fn empty_and_missing_fields_become_explicit_unavailable_never_zero() {
     let s = h.engine.snapshot();
     assert_eq!(s.measurements.len(), 4); // one placeholder per declared capability
     for m in &s.measurements {
-        assert_eq!(m.value, MeasurementValue::Unavailable { reason: UnavailableReason::NotReported });
+        assert_eq!(
+            m.value,
+            MeasurementValue::Unavailable {
+                reason: UnavailableReason::NotReported
+            }
+        );
     }
-    let sub = s.coverage.iter().find(|c| c.category == MeasurementCategory::SubscriptionUsage).unwrap();
+    let sub = s
+        .coverage
+        .iter()
+        .find(|c| c.category == MeasurementCategory::SubscriptionUsage)
+        .unwrap();
     assert_eq!(sub.state, CoverageState::NotConnected);
 
-    h.provider.set_default(MockBehavior::MissingFields(vec![MeasurementId::SubscriptionWeeklyUtilization]));
+    h.provider.set_default(MockBehavior::MissingFields(vec![
+        MeasurementId::SubscriptionWeeklyUtilization,
+    ]));
     h.engine.sync_once(Trigger::Manual).await.unwrap();
     let weekly = find(&h.engine.snapshot(), MeasurementId::SubscriptionWeeklyUtilization);
     assert_eq!(weekly.len(), 1);
@@ -85,7 +112,11 @@ async fn old_source_data_is_flagged_stale_and_connection_becomes_stale() {
     assert_eq!(s.connection, ConnectionState::Stale);
     assert!(find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0].stale);
     // stale values must not be written to history as fresh readings
-    let hist = h.repo.measurement_history("p", MeasurementId::SubscriptionFiveHourUtilization, None, 10).await.unwrap();
+    let hist = h
+        .repo
+        .measurement_history("p", MeasurementId::SubscriptionFiveHourUtilization, None, 10)
+        .await
+        .unwrap();
     assert!(hist.is_empty());
 }
 
@@ -98,12 +129,19 @@ async fn network_failure_keeps_last_value_marked_stale_and_backs_off() {
     let mut delays = vec![];
     for _ in 0..4 {
         h.clock.advance(secs(3600));
-        assert_eq!(h.engine.sync_once(Trigger::Scheduled).await.unwrap(), SyncResult::Failed);
+        assert_eq!(
+            h.engine.sync_once(Trigger::Scheduled).await.unwrap(),
+            SyncResult::Failed
+        );
         let s = h.engine.snapshot();
         delays.push((s.next_attempt_at.unwrap() - h.clock.now()).num_seconds());
         assert_eq!(s.connection, ConnectionState::TemporarilyUnavailable);
         let five = find(&s, MeasurementId::SubscriptionFiveHourUtilization);
-        assert_eq!(five[0].value.value(), Some(42.0), "last valid reading retained, not zeroed");
+        assert_eq!(
+            five[0].value.value(),
+            Some(42.0),
+            "last valid reading retained, not zeroed"
+        );
         assert!(five[0].stale);
         assert_eq!(s.latest_error.as_ref().unwrap().category, ErrorCategory::Network);
     }
@@ -140,7 +178,10 @@ async fn provider_timeout_is_enforced() {
     .script([MockBehavior::Hang]);
     let h = harness(p).await;
     let t = std::time::Instant::now();
-    assert_eq!(h.engine.sync_once(Trigger::Manual).await.unwrap(), SyncResult::Failed);
+    assert_eq!(
+        h.engine.sync_once(Trigger::Manual).await.unwrap(),
+        SyncResult::Failed
+    );
     assert!(t.elapsed() < Std::from_secs(5));
     let s = h.engine.snapshot();
     assert_eq!(s.latest_error.unwrap().category, ErrorCategory::Timeout);
@@ -166,7 +207,10 @@ async fn concurrent_syncs_are_deduplicated() {
     let e1 = h.engine.clone();
     let first = tokio::spawn(async move { e1.sync_once(Trigger::Scheduled).await });
     tokio::time::sleep(Std::from_millis(150)).await;
-    assert_eq!(h.engine.sync_once(Trigger::Manual).await.unwrap(), SyncResult::AlreadyRunning);
+    assert_eq!(
+        h.engine.sync_once(Trigger::Manual).await.unwrap(),
+        SyncResult::AlreadyRunning
+    );
     first.await.unwrap().unwrap();
     assert_eq!(h.provider.calls(), 1);
 }
@@ -180,7 +224,10 @@ async fn auth_expiry_requires_authentication_without_retry_loop_or_crash() {
     h.engine.sync_once(Trigger::Scheduled).await.unwrap();
     let s = h.engine.snapshot();
     assert_eq!(s.connection, ConnectionState::AuthenticationRequired);
-    assert_eq!(s.next_attempt_at, None, "no automatic retries after an auth failure");
+    assert_eq!(
+        s.next_attempt_at, None,
+        "no automatic retries after an auth failure"
+    );
     assert!(find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0].stale);
     assert!(h.sink.names().contains(&EVENT_AUTHENTICATION_REQUIRED));
     assert_eq!(h.provider.auth_state(), usage_core::providers::AuthState::Expired);
@@ -213,21 +260,37 @@ async fn rate_limit_honours_retry_after_and_suspends_requests() {
     assert_eq!(s.connection, ConnectionState::RateLimited);
     let until = s.rate_limited_until.unwrap();
     let wait = (until - h.clock.now()).num_seconds();
-    assert!((120..=132).contains(&wait), "retry-after is a floor with ≤10% jitter: {wait}");
+    assert!(
+        (120..=132).contains(&wait),
+        "retry-after is a floor with ≤10% jitter: {wait}"
+    );
     assert_eq!(s.next_attempt_at, Some(until));
-    assert!(h.sink.events().iter().any(|e| matches!(e, MonitoringEvent::RateLimited(p) if p.retry_after_secs == Some(120))));
+    assert!(h
+        .sink
+        .events()
+        .iter()
+        .any(|e| matches!(e, MonitoringEvent::RateLimited(p) if p.retry_after_secs == Some(120))));
 
     // While backing off: scheduled AND manual refreshes make no request.
     let calls = h.provider.calls();
     h.clock.advance(secs(60));
-    assert!(matches!(h.engine.sync_once(Trigger::Scheduled).await.unwrap(), SyncResult::SkippedRateLimited { .. }));
-    assert!(matches!(h.engine.refresh_now().await.unwrap(), SyncResult::SkippedRateLimited { .. }));
+    assert!(matches!(
+        h.engine.sync_once(Trigger::Scheduled).await.unwrap(),
+        SyncResult::SkippedRateLimited { .. }
+    ));
+    assert!(matches!(
+        h.engine.refresh_now().await.unwrap(),
+        SyncResult::SkippedRateLimited { .. }
+    ));
     assert_eq!(h.provider.calls(), calls);
 
     // After the retry window it resumes.
     h.provider.set_default(MockBehavior::Success);
     h.clock.advance(secs(120));
-    assert_eq!(h.engine.sync_once(Trigger::Scheduled).await.unwrap(), SyncResult::Succeeded);
+    assert_eq!(
+        h.engine.sync_once(Trigger::Scheduled).await.unwrap(),
+        SyncResult::Succeeded
+    );
     let s = h.engine.snapshot();
     assert_eq!(s.connection, ConnectionState::Current);
     assert!(s.rate_limited_until.is_none());
@@ -252,11 +315,22 @@ async fn malformed_and_out_of_range_responses_are_rejected_without_panicking() {
     for b in [MockBehavior::Malformed, MockBehavior::OutOfRange] {
         h.provider.set_default(b);
         h.clock.advance(secs(3600));
-        assert_eq!(h.engine.sync_once(Trigger::Scheduled).await.unwrap(), SyncResult::Failed);
+        assert_eq!(
+            h.engine.sync_once(Trigger::Scheduled).await.unwrap(),
+            SyncResult::Failed
+        );
         let s = h.engine.snapshot();
-        assert_eq!(s.latest_error.as_ref().unwrap().category, ErrorCategory::InvalidResponse);
+        assert_eq!(
+            s.latest_error.as_ref().unwrap().category,
+            ErrorCategory::InvalidResponse
+        );
         // last good data survives
-        assert_eq!(find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0].value.value(), Some(42.0));
+        assert_eq!(
+            find(&s, MeasurementId::SubscriptionFiveHourUtilization)[0]
+                .value
+                .value(),
+            Some(42.0)
+        );
     }
 }
 
@@ -286,11 +360,19 @@ async fn unchanged_values_are_not_re_persisted_until_heartbeat() {
     }
     let id = MeasurementId::SubscriptionWeeklyUtilization;
     // resets_at moves with the clock in the mock, so use a field that is constant:
-    let ctx = h.repo.measurement_history("p", MeasurementId::LocalContextWindowUtilization, Some("s1"), 10).await.unwrap();
+    let ctx = h
+        .repo
+        .measurement_history("p", MeasurementId::LocalContextWindowUtilization, Some("s1"), 10)
+        .await
+        .unwrap();
     assert_eq!(ctx.len(), 1, "constant value written once within the heartbeat");
     h.clock.advance(secs(400)); // > 5 min heartbeat
     h.engine.sync_once(Trigger::Manual).await.unwrap();
-    let ctx = h.repo.measurement_history("p", MeasurementId::LocalContextWindowUtilization, Some("s1"), 10).await.unwrap();
+    let ctx = h
+        .repo
+        .measurement_history("p", MeasurementId::LocalContextWindowUtilization, Some("s1"), 10)
+        .await
+        .unwrap();
     assert_eq!(ctx.len(), 2);
     let _ = id;
 }
@@ -300,7 +382,11 @@ async fn restart_restores_history_as_restored_and_stale_not_fresh() {
     let dir = tempfile::tempdir().unwrap();
     let h = harness_in(dir, real("p")).await;
     h.engine.sync_once(Trigger::Manual).await.unwrap();
-    let cfg = usage_core::config::AppConfig { refresh_interval_secs: Some(45), minimize_to_tray: false, ..h.engine.config() };
+    let cfg = usage_core::config::AppConfig {
+        refresh_interval_secs: Some(45),
+        minimize_to_tray: false,
+        ..h.engine.config()
+    };
     h.engine.apply_config(cfg).await.unwrap();
     h.engine.shutdown().await;
     let dir = h.dir; // keep the files
@@ -317,8 +403,15 @@ async fn restart_restores_history_as_restored_and_stale_not_fresh() {
     assert_eq!(s.run_state, RunState::Stopped);
     let five = find(&s, MeasurementId::SubscriptionFiveHourUtilization);
     assert_eq!(five[0].value.value(), Some(42.0));
-    assert!(five[0].restored && five[0].stale, "history must not look like a fresh measurement");
-    let sub = s.coverage.iter().find(|c| c.category == MeasurementCategory::SubscriptionUsage).unwrap();
+    assert!(
+        five[0].restored && five[0].stale,
+        "history must not look like a fresh measurement"
+    );
+    let sub = s
+        .coverage
+        .iter()
+        .find(|c| c.category == MeasurementCategory::SubscriptionUsage)
+        .unwrap();
     assert_eq!(sub.state, CoverageState::Stale);
 }
 
@@ -327,12 +420,24 @@ async fn config_is_validated_and_provider_must_exist() {
     let h = harness(real("p")).await;
     let mut bad = h.engine.config();
     bad.refresh_interval_secs = Some(0);
-    assert_eq!(h.engine.apply_config(bad).await.unwrap_err().category(), ErrorCategory::Configuration);
+    assert_eq!(
+        h.engine.apply_config(bad).await.unwrap_err().category(),
+        ErrorCategory::Configuration
+    );
     let mut unknown = h.engine.config();
     unknown.selected_provider = "nope".into();
-    assert_eq!(h.engine.apply_config(unknown).await.unwrap_err().category(), ErrorCategory::Configuration);
+    assert_eq!(
+        h.engine.apply_config(unknown).await.unwrap_err().category(),
+        ErrorCategory::Configuration
+    );
     // rejected config is not persisted
-    assert_eq!(usage_core::config::load(h.repo.as_ref()).await.unwrap().refresh_interval_secs, None);
+    assert_eq!(
+        usage_core::config::load(h.repo.as_ref())
+            .await
+            .unwrap()
+            .refresh_interval_secs,
+        None
+    );
 }
 
 #[tokio::test]
@@ -400,7 +505,9 @@ async fn loop_polls_without_any_observer_and_stops_cleanly_on_shutdown() {
 #[tokio::test]
 async fn loop_does_not_hammer_a_failing_provider() {
     let h = loop_harness(
-        MockProvider::with_policy("p", fast_policy()).pretend_real().script([]),
+        MockProvider::with_policy("p", fast_policy())
+            .pretend_real()
+            .script([]),
     )
     .await;
     h.provider.set_default(MockBehavior::NetworkFailure);
@@ -431,7 +538,10 @@ async fn unsupported_provider_refuses_to_start() {
     h.provider.set_default(MockBehavior::Unsupported);
     let err = h.engine.start().await.unwrap_err();
     assert_eq!(err.category(), ErrorCategory::UnsupportedCapability);
-    assert_eq!(h.engine.snapshot().connection, ConnectionState::PermanentlyUnsupported);
+    assert_eq!(
+        h.engine.snapshot().connection,
+        ConnectionState::PermanentlyUnsupported
+    );
     assert!(!h.engine.is_running().await);
 }
 
@@ -439,10 +549,15 @@ async fn unsupported_provider_refuses_to_start() {
 fn event_names_are_the_documented_contract() {
     assert_eq!(EVENT_STARTED, "monitoring://started");
     assert_eq!(EVENT_UPDATED, "monitoring://updated");
-    assert_eq!(EVENT_PROVIDER_STATUS_CHANGED, "monitoring://provider-status-changed");
-    assert_eq!(EVENT_AUTHENTICATION_REQUIRED, "monitoring://authentication-required");
+    assert_eq!(
+        EVENT_PROVIDER_STATUS_CHANGED,
+        "monitoring://provider-status-changed"
+    );
+    assert_eq!(
+        EVENT_AUTHENTICATION_REQUIRED,
+        "monitoring://authentication-required"
+    );
     assert_eq!(EVENT_RATE_LIMITED, "monitoring://rate-limited");
     assert_eq!(EVENT_ERROR, "monitoring://error");
     assert_eq!(EVENT_STOPPED, "monitoring://stopped");
 }
-

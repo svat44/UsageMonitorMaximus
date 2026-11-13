@@ -21,8 +21,16 @@ pub fn init(data_dir: &Path, level: LogLevel) -> LogHandle {
     let file = tracing_appender::rolling::daily(data_dir.join("logs"), "app.log");
     let _ = Registry::default()
         .with(filter)
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr).with_target(false))
-        .with(tracing_subscriber::fmt::layer().with_writer(file).with_ansi(false))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_target(false),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(file)
+                .with_ansi(false),
+        )
         .try_init();
     handle
 }

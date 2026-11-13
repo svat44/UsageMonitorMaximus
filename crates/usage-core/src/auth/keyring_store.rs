@@ -15,7 +15,9 @@ pub struct KeyringCredentialStore {
 impl KeyringCredentialStore {
     /// `service` namespaces our entries in the OS store (e.g. `com.usagemonitormaximus.app`).
     pub fn new(service: impl Into<String>) -> Self {
-        Self { service: service.into() }
+        Self {
+            service: service.into(),
+        }
     }
 
     fn entry(&self, key: &CredentialKey) -> Result<Entry> {

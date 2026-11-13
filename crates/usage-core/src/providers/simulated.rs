@@ -64,7 +64,9 @@ impl Provider for SimulatedProvider {
         let t = self.tick.fetch_add(1, Ordering::Relaxed);
         let now = ctx.now;
         let v = Verification::Simulated;
-        let m = |id, value: f64| Measurement::available(id, SIMULATED_PROVIDER_ID, value, now, v).with_source_at(now);
+        let m = |id, value: f64| {
+            Measurement::available(id, SIMULATED_PROVIDER_ID, value, now, v).with_source_at(now)
+        };
         Ok(vec![
             m(Id::SubscriptionFiveHourUtilization, ((t * 7) % 100) as f64)
                 .with_resets_at(now + Duration::hours(3)),

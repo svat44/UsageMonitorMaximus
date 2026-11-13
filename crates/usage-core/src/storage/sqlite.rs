@@ -5,7 +5,9 @@ use std::time::Duration as StdDuration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow, SqliteSynchronous};
+use sqlx::sqlite::{
+    SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow, SqliteSynchronous,
+};
 use sqlx::{Row, SqlitePool};
 
 use super::*;
@@ -32,7 +34,10 @@ impl SqliteRepository {
             .synchronous(SqliteSynchronous::Normal)
             .foreign_keys(true)
             .busy_timeout(StdDuration::from_secs(5));
-        let pool = SqlitePoolOptions::new().max_connections(4).connect_with(opts).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(4)
+            .connect_with(opts)
+            .await?;
         MIGRATOR.run(&pool).await?;
         Ok(Self { pool })
     }
@@ -48,9 +53,13 @@ fn row_to_measurement(r: &SqliteRow, restored: bool) -> Result<Measurement> {
     let id = MeasurementId::parse(&id_s).ok_or_else(|| bad("measurement_id", &id_s))?;
     let availability: String = r.try_get("availability")?;
     let value = if availability == "available" {
-        MeasurementValue::Available { value: r.try_get::<f64, _>("value")? }
+        MeasurementValue::Available {
+            value: r.try_get::<f64, _>("value")?,
+        }
     } else {
-        let rs: String = r.try_get::<Option<String>, _>("unavailable_reason")?.unwrap_or_default();
+        let rs: String = r
+            .try_get::<Option<String>, _>("unavailable_reason")?
+            .unwrap_or_default();
         MeasurementValue::Unavailable {
             reason: UnavailableReason::parse(&rs).ok_or_else(|| bad("unavailable_reason", &rs))?,
         }
@@ -80,17 +89,20 @@ fn row_to_measurement(r: &SqliteRow, restored: bool) -> Result<Measurement> {
 #[async_trait]
 impl Repository for SqliteRepository {
     async fn schema_version(&self) -> Result<i64> {
-        let v: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
-            .fetch_one(&self.pool)
-            .await?;
+        let v: Option<i64> =
+            sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
+                .fetch_one(&self.pool)
+                .await?;
         Ok(v.unwrap_or(0))
     }
 
     async fn get_preference(&self, key: &str) -> Result<Option<String>> {
-        Ok(sqlx::query_scalar("SELECT value FROM app_preferences WHERE key = ?")
-            .bind(key)
-            .fetch_optional(&self.pool)
-            .await?)
+        Ok(
+            sqlx::query_scalar("SELECT value FROM app_preferences WHERE key = ?")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await?,
+        )
     }
 
     async fn set_preference(&self, key: &str, value: &str, now: DateTime<Utc>) -> Result<()> {
@@ -192,7 +204,11 @@ impl Repository for SqliteRepository {
         Ok(run_id)
     }
 
-    async fn latest_measurements(&self, provider_id: &str, newer_than: DateTime<Utc>) -> Result<Vec<Measurement>> {
+    async fn latest_measurements(
+        &self,
+        provider_id: &str,
+        newer_than: DateTime<Utc>,
+    ) -> Result<Vec<Measurement>> {
         let rows = sqlx::query(
             "SELECT m.* FROM measurements m
              JOIN (SELECT MAX(id) AS mid FROM measurements
@@ -285,13 +301,18 @@ impl Repository for SqliteRepository {
             .await?
             .rows_affected();
         tx.commit().await?;
-        Ok(PruneReport { measurements: m, sync_runs: s, diagnostics: d })
+        Ok(PruneReport {
+            measurements: m,
+            sync_runs: s,
+            diagnostics: d,
+        })
     }
 
     async fn close(&self) {
         // Checkpoint the WAL so the .sqlite file is self-contained, then close.
-        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&self.pool).await;
+        let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .execute(&self.pool)
+            .await;
         self.pool.close().await;
     }
 }
-

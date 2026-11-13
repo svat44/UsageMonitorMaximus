@@ -84,7 +84,11 @@ pub trait Repository: Send + Sync {
     async fn record_sync(&self, rec: &SyncRecord) -> Result<i64>;
 
     /// Most recent persisted row per (measurement id, scope) for a provider, as `restored`+`stale`.
-    async fn latest_measurements(&self, provider_id: &str, newer_than: DateTime<Utc>) -> Result<Vec<Measurement>>;
+    async fn latest_measurements(
+        &self,
+        provider_id: &str,
+        newer_than: DateTime<Utc>,
+    ) -> Result<Vec<Measurement>>;
 
     async fn measurement_history(
         &self,

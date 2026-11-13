@@ -31,7 +31,11 @@ pub fn handle(raw: &str, data_dir: &std::path::Path) -> String {
         return String::new();
     };
     let line = summary_line(&payload);
-    let env = SnapshotEnvelope { schema_version: SCHEMA_VERSION, received_at: chrono::Utc::now(), payload };
+    let env = SnapshotEnvelope {
+        schema_version: SCHEMA_VERSION,
+        received_at: chrono::Utc::now(),
+        payload,
+    };
     let _ = write_snapshot(&paths::statusline_dir(data_dir), &env);
     line
 }
@@ -54,7 +58,10 @@ mod tests {
             d.path(),
         );
         assert_eq!(out, "5h 50%");
-        let files: Vec<_> = std::fs::read_dir(d.path().join("statusline")).unwrap().flatten().collect();
+        let files: Vec<_> = std::fs::read_dir(d.path().join("statusline"))
+            .unwrap()
+            .flatten()
+            .collect();
         assert_eq!(files.len(), 1);
         let text = std::fs::read_to_string(files[0].path()).unwrap();
         assert!(!text.contains("/private"), "private fields are not persisted");

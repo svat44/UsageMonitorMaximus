@@ -126,7 +126,13 @@ impl MockProvider {
         }
     }
 
-    fn build(&self, now: DateTime<Utc>, source_age: i64, skip: &[Id], unavailable_5h: bool) -> Vec<Measurement> {
+    fn build(
+        &self,
+        now: DateTime<Utc>,
+        source_age: i64,
+        skip: &[Id],
+        unavailable_5h: bool,
+    ) -> Vec<Measurement> {
         let v = self.verification();
         let src = now - Duration::seconds(source_age);
         let id = self.desc.id.clone();
@@ -171,7 +177,9 @@ impl Provider for MockProvider {
 
     async fn check_availability(&self) -> Availability {
         match *self.default.lock().unwrap() {
-            MockBehavior::Unsupported => Availability::Unsupported { reason: "mock".into() },
+            MockBehavior::Unsupported => Availability::Unsupported {
+                reason: "mock".into(),
+            },
             _ => Availability::Available,
         }
     }

@@ -73,8 +73,21 @@ async fn unavailable_round_trips_as_null_not_zero() {
     r.record_sync(&rec(vec![un], now())).await.unwrap();
     let raw: Option<f64> = sqlx_value(&r).await;
     assert_eq!(raw, None, "stored as NULL");
-    let h = r.measurement_history("simulated", MeasurementId::SubscriptionFiveHourUtilization, None, 5).await.unwrap();
-    assert_eq!(h[0].value, MeasurementValue::Unavailable { reason: UnavailableReason::WindowExpired });
+    let h = r
+        .measurement_history(
+            "simulated",
+            MeasurementId::SubscriptionFiveHourUtilization,
+            None,
+            5,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        h[0].value,
+        MeasurementValue::Unavailable {
+            reason: UnavailableReason::WindowExpired
+        }
+    );
 }
 
 async fn sqlx_value(r: &SqliteRepository) -> Option<f64> {
@@ -112,24 +125,50 @@ async fn sync_record_is_transactional() {
     bad.provider_id = "does-not-exist".into();
     let err = r.record_sync(&rec(vec![good, bad], now())).await.unwrap_err();
     assert_eq!(err.category(), ErrorCategory::Database);
-    let runs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_runs").fetch_one(r.pool()).await.unwrap();
-    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM measurements").fetch_one(r.pool()).await.unwrap();
+    let runs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sync_runs")
+        .fetch_one(r.pool())
+        .await
+        .unwrap();
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM measurements")
+        .fetch_one(r.pool())
+        .await
+        .unwrap();
     assert_eq!((runs, rows), (0, 0));
 }
 
 #[tokio::test]
 async fn latest_measurements_returns_newest_per_key_marked_restored_and_stale() {
     let (r, _d) = repo().await;
-    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 1.0, now())], now())).await.unwrap();
+    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 1.0, now())], now()))
+        .await
+        .unwrap();
     let later = now() + Duration::minutes(10);
-    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 2.0, later), m(MeasurementId::LocalActiveSessions, 3.0, later).with_scope("a")], later)).await.unwrap();
-    let latest = r.latest_measurements("simulated", now() - Duration::days(1)).await.unwrap();
+    r.record_sync(&rec(
+        vec![
+            m(MeasurementId::ApiInputTokens, 2.0, later),
+            m(MeasurementId::LocalActiveSessions, 3.0, later).with_scope("a"),
+        ],
+        later,
+    ))
+    .await
+    .unwrap();
+    let latest = r
+        .latest_measurements("simulated", now() - Duration::days(1))
+        .await
+        .unwrap();
     assert_eq!(latest.len(), 2);
-    let tokens = latest.iter().find(|x| x.id == MeasurementId::ApiInputTokens).unwrap();
+    let tokens = latest
+        .iter()
+        .find(|x| x.id == MeasurementId::ApiInputTokens)
+        .unwrap();
     assert_eq!(tokens.value.value(), Some(2.0));
     assert!(latest.iter().all(|x| x.restored && x.stale));
     // too old → not restored
-    assert!(r.latest_measurements("simulated", later + Duration::days(1)).await.unwrap().is_empty());
+    assert!(r
+        .latest_measurements("simulated", later + Duration::days(1))
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -137,10 +176,18 @@ async fn history_is_newest_first_and_not_flagged_restored() {
     let (r, _d) = repo().await;
     for i in 0..3 {
         let t = now() + Duration::minutes(i);
-        r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, i as f64, t)], t)).await.unwrap();
+        r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, i as f64, t)], t))
+            .await
+            .unwrap();
     }
-    let h = r.measurement_history("simulated", MeasurementId::ApiInputTokens, None, 2).await.unwrap();
-    assert_eq!(h.iter().map(|x| x.value.value().unwrap()).collect::<Vec<_>>(), vec![2.0, 1.0]);
+    let h = r
+        .measurement_history("simulated", MeasurementId::ApiInputTokens, None, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        h.iter().map(|x| x.value.value().unwrap()).collect::<Vec<_>>(),
+        vec![2.0, 1.0]
+    );
     assert!(h.iter().all(|x| !x.restored));
 }
 
@@ -149,16 +196,39 @@ async fn retention_prunes_each_table_by_its_own_window() {
     let (r, _d) = repo().await;
     let old = now() - Duration::days(100);
     let mid = now() - Duration::days(40);
-    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 1.0, old)], old)).await.unwrap();
-    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 2.0, mid)], mid)).await.unwrap();
-    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 3.0, now())], now())).await.unwrap();
+    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 1.0, old)], old))
+        .await
+        .unwrap();
+    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 2.0, mid)], mid))
+        .await
+        .unwrap();
+    r.record_sync(&rec(vec![m(MeasurementId::ApiInputTokens, 3.0, now())], now()))
+        .await
+        .unwrap();
     r.record_diagnostic(&DiagnosticEvent {
-        occurred_at: mid, level: "warn".into(), provider_id: None, operation: "x".into(), category: None, message: "old".into(),
-    }).await.unwrap();
+        occurred_at: mid,
+        level: "warn".into(),
+        provider_id: None,
+        operation: "x".into(),
+        category: None,
+        message: "old".into(),
+    })
+    .await
+    .unwrap();
     let rep = r.prune(&RetentionPolicy::default(), now()).await.unwrap();
-    assert_eq!(rep, PruneReport { measurements: 1, sync_runs: 2, diagnostics: 1 });
+    assert_eq!(
+        rep,
+        PruneReport {
+            measurements: 1,
+            sync_runs: 2,
+            diagnostics: 1
+        }
+    );
     // the 40-day-old measurement outlives its (30-day) sync run
-    let h = r.measurement_history("simulated", MeasurementId::ApiInputTokens, None, 10).await.unwrap();
+    let h = r
+        .measurement_history("simulated", MeasurementId::ApiInputTokens, None, 10)
+        .await
+        .unwrap();
     assert_eq!(h.len(), 2);
 }
 
@@ -169,7 +239,10 @@ async fn failure_records_update_provider_error_columns() {
     f.outcome = SyncOutcome::Failure;
     f.error_category = Some(ErrorCategory::Network);
     r.record_sync(&f).await.unwrap();
-    let cat: Option<String> = sqlx::query_scalar("SELECT last_error_category FROM providers WHERE id='simulated'")
-        .fetch_one(r.pool()).await.unwrap();
+    let cat: Option<String> =
+        sqlx::query_scalar("SELECT last_error_category FROM providers WHERE id='simulated'")
+            .fetch_one(r.pool())
+            .await
+            .unwrap();
     assert_eq!(cat.as_deref(), Some("network"));
 }

@@ -91,7 +91,10 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
             CloseAction::HideToTray => {
                 api.prevent_close();
                 let _ = window.hide();
-                tracing::info!(operation = "window_close", "dashboard hidden to tray; monitoring continues");
+                tracing::info!(
+                    operation = "window_close",
+                    "dashboard hidden to tray; monitoring continues"
+                );
             }
             CloseAction::QuitGracefully => {
                 api.prevent_close();
@@ -135,7 +138,16 @@ fn try_build_tray(app: &AppHandle) -> tauri::Result<()> {
     let refresh = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
     let toggle = CheckMenuItem::with_id(app, "toggle", "Monitoring enabled", true, enabled, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &refresh, &toggle, &PredefinedMenuItem::separator(app)?, &quit_i])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &refresh,
+            &toggle,
+            &PredefinedMenuItem::separator(app)?,
+            &quit_i,
+        ],
+    )?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Usage Monitor Maximus")
@@ -163,7 +175,12 @@ fn try_build_tray(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, ev| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = ev
+            {
                 show_main_window(tray.app_handle());
             }
         });
@@ -185,8 +202,14 @@ mod tests {
 
     #[test]
     fn close_quits_when_tray_disabled_or_unavailable() {
-        assert_eq!(on_close_requested(false, true, false), CloseAction::QuitGracefully);
-        assert_eq!(on_close_requested(true, false, false), CloseAction::QuitGracefully);
+        assert_eq!(
+            on_close_requested(false, true, false),
+            CloseAction::QuitGracefully
+        );
+        assert_eq!(
+            on_close_requested(true, false, false),
+            CloseAction::QuitGracefully
+        );
     }
 
     #[test]
@@ -198,7 +221,10 @@ mod tests {
     fn implicit_exit_is_prevented_unless_quitting() {
         assert!(should_prevent_exit(None, false));
         assert!(!should_prevent_exit(None, true));
-        assert!(!should_prevent_exit(Some(0), false), "explicit exit() must always work");
+        assert!(
+            !should_prevent_exit(Some(0), false),
+            "explicit exit() must always work"
+        );
     }
 
     #[test]

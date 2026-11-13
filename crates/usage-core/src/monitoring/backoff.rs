@@ -30,7 +30,12 @@ impl BackoffPolicy {
 
     /// Delay after a rate-limit response. A provider-supplied `Retry-After` is a **floor**:
     /// we never retry earlier than told; jitter is only ever added on top (≤10%).
-    pub fn rate_limit_delay(&self, retry_after: Option<Duration>, failures: u32, jitter_unit: f64) -> Duration {
+    pub fn rate_limit_delay(
+        &self,
+        retry_after: Option<Duration>,
+        failures: u32,
+        jitter_unit: f64,
+    ) -> Duration {
         match retry_after {
             Some(ra) => ra + ra.mul_f64(0.10 * jitter_unit.clamp(0.0, 1.0)),
             None => self.delay(failures, jitter_unit).max(self.base),
@@ -43,7 +48,11 @@ mod tests {
     use super::*;
 
     fn p() -> BackoffPolicy {
-        BackoffPolicy { base: Duration::from_secs(10), cap: Duration::from_secs(300), jitter: 0.25 }
+        BackoffPolicy {
+            base: Duration::from_secs(10),
+            cap: Duration::from_secs(300),
+            jitter: 0.25,
+        }
     }
 
     #[test]

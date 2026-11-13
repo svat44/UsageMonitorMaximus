@@ -212,7 +212,8 @@ mod tests {
         assert_eq!(p.session_id.as_deref(), Some("abc123"));
         let rl = p.rate_limits.unwrap();
         assert_eq!(rl.five_hour.unwrap().used_percentage, Some(23.5));
-        let again = serde_json::to_string(&StatusLinePayload::from_claude_code_json(DOC_EXAMPLE).unwrap()).unwrap();
+        let again =
+            serde_json::to_string(&StatusLinePayload::from_claude_code_json(DOC_EXAMPLE).unwrap()).unwrap();
         assert!(!again.contains("transcript"));
         assert!(!again.contains("/home/me"));
     }
@@ -245,7 +246,10 @@ mod tests {
         let out = read_snapshots(d.path()).unwrap();
         assert_eq!(out.snapshots.len(), 1);
         assert_eq!(out.malformed, 1);
-        assert_eq!(summary_line(&out.snapshots[0].payload), "5h 24% · 7d 41% · ctx 8%");
+        assert_eq!(
+            summary_line(&out.snapshots[0].payload),
+            "5h 24% · 7d 41% · ctx 8%"
+        );
     }
 
     #[test]
