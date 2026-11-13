@@ -67,7 +67,7 @@ Do not poll; follow `monitoring://updated`.
 
 | Check | Result |
 |---|---|
-| `cargo test -p usage-core` | 88 passed (55 unit incl. 1 ignored keyring, 22 engine scenarios, 10 storage, 1 statusline e2e) |
+| `cargo test -p usage-core` | 89 passed + 1 ignored (56 unit, 22 engine scenarios, 10 storage, 1 statusline e2e; the ignored one is the OS-keyring test, run separately) |
 | `cargo test -p usage-monitor-statusline` | 2 passed |
 | `cargo test -p usage-monitor-app` | 6 passed (lifecycle decisions, TS export) |
 | keyring conformance, **real gnome-keyring Secret Service (Linux)** | passed (`--ignored keyring` under `dbus-run-session`) |
