@@ -42,7 +42,9 @@ pub enum Trigger {
     Manual,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(tag = "result", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[ts(export)]
 pub enum SyncResult {
     Succeeded,
     Failed,

@@ -90,6 +90,20 @@ impl AppConfig {
     }
 }
 
+/// Load persisted config; absent or unreadable config falls back to defaults (never blocks startup).
+pub async fn load(repo: &dyn crate::storage::Repository) -> Result<AppConfig> {
+    match repo.get_preference(PREF_KEY_CONFIG).await? {
+        None => Ok(AppConfig::default()),
+        Some(json) => match serde_json::from_str(&json) {
+            Ok(c) => Ok(c),
+            Err(e) => {
+                tracing::warn!(operation = "load_config", category = "configuration", "stored config unreadable, using defaults: {e}");
+                Ok(AppConfig::default())
+            }
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
