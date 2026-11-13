@@ -1,0 +1,39 @@
+[package]
+name = "usage-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Provider-neutral monitoring engine, data model, storage and credential abstractions (no UI dependencies)"
+
+[features]
+default = ["sqlite", "keyring-store"]
+# SQLite persistence via sqlx. The statusline bridge builds without it.
+sqlite = ["dep:sqlx"]
+# OS credential storage via `keyring`.
+keyring-store = ["dep:keyring"]
+
+[dependencies]
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+fastrand = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "sync", "time", "macros", "fs"] }
+tokio-util = "0.7"
+tracing = "0.1"
+ts-rs = { version = "12", features = ["chrono-impl"] }
+sqlx = { version = "0.8", optional = true, default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "chrono"] }
+keyring = { version = "3.6", optional = true, default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "test-util", "macros", "time", "sync", "fs"] }
